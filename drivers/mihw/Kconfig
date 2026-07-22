@@ -1,0 +1,24 @@
+config MIHW
+	bool "Xiaomi Kernel Feature config"
+	depends on ARCH_QCOM
+	default y
+
+config MILLET
+	bool "frozen framework"
+	depends on MIHW
+
+config MI_MEM_ENGINE
+    bool "MI_MEM_ENGINE tracing mem alloc"
+	depends on MIHW
+
+config KSHRINK_SLABD
+    bool "Allow asynchronous shrink slab"
+	depends on MIHW
+
+config XIAOMI_METIS
+	bool "boost cpufreq when load high"
+	depends on MIHW
+
+config SOFTWARE_OS3
+	bool "create HyperOS 3 software"
+	depends on MIHW
