@@ -85,6 +85,7 @@ jobs:
 
       - name: Notify Telegram on build success
         if: success()
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -104,13 +105,13 @@ jobs:
           <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Run: #${{ github.run_number }}</a>
           <a href=\"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\">Commit: ${SHORT_SHA}...</a>"
 
-          ZIP_FILE=$(find . -maxdepth 1 -name '*.zip' | head -n 1)
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F chat_id="${TELEGRAM_CHAT_ID}" \
               -F document="@${ZIP_FILE}" \
-              -F caption="${MESSAGE}" \
-              -F "parse_mode=HTML"
+              --form-string chat_id="${TELEGRAM_CHAT_ID}" \
+              --form-string caption="${MESSAGE}" \
+              --form-string "parse_mode=HTML"
           else
             curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
@@ -120,6 +121,7 @@ jobs:
 
       - name: Notify Telegram on build failure
         if: failure()
+        continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
