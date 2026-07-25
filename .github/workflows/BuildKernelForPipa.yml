@@ -83,6 +83,49 @@ jobs:
       - name: Build Kernel
         run: ./build.sh
 
+      - name: Notify Telegram on build success
+        if: ${{ success() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -name '*.zip' | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+              -F chat_id="${TELEGRAM_CHAT_ID}" \
+              -F document="@$ZIP_FILE" \
+              -F caption="✅ Build succeeded
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Workflow: ${{ github.workflow }}
+          Run: #${{ github.run_number }}
+          Commit: ${{ github.sha }}"
+          else
+            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              -d text="✅ Build succeeded
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Workflow: ${{ github.workflow }}
+          Run: #${{ github.run_number }}
+          Commit: ${{ github.sha }}"
+          fi
+
+      - name: Notify Telegram on build failure
+        if: ${{ failure() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="❌ Build failed
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Workflow: ${{ github.workflow }}
+          Run: #${{ github.run_number }}
+          Commit: ${{ github.sha }}"
+
       - name: Upload Kernel Zip
         uses: actions/upload-artifact@v7
         with:
