@@ -82,6 +82,8 @@ export KBUILD_LAST_COMMIT=${GIT_COMMIT_ID}
 msg '清理上次构建的残留文件（强制清理） / Performing cleanup of previous build files (Forced Clean)...'
 rm -rf out/
 rm -f error.log
+rm -f .config
+rm -rf include/config
 mkdir -p out/
 
 msg '准备 AnyKernel3 / Preparing AnyKernel3...'
