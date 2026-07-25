@@ -96,7 +96,7 @@ fi
 
 msg '为 PIPA 配置 (pipa_user_defconfig) / Configuring for PIPA (pipa_user_defconfig)...'
 make $MAKE_ARGS pipa_user_defconfig
-scripts/kconfig/merge_config.sh -m .config arch/arm64/configs/xiaomi.config
+scripts/kconfig/merge_config.sh -m out/.config arch/arm64/configs/xiaomi.config
 yes '' | make $MAKE_ARGS olddefconfig
 
 if [ -z "${JOBS:-}" ]; then
