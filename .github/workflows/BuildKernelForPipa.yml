@@ -1,0 +1,98 @@
+name: Build Kernel For Pipa
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_droidspaces:
+        description: '集成 Droidspaces / Integrate Droidspaces'
+        required: false
+        type: boolean
+        default: false
+      enable_rekernel:
+        description: '集成 ReKernel / Integrate ReKernel'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set branch environment variable
+        run: |
+          echo "BRANCH=${{ github.ref_name }}" >> $GITHUB_ENV
+          echo "KERNEL_ROOT=${{ github.workspace }}" >> $GITHUB_ENV
+          echo "PATCH_ROOT=${{ github.workspace }}/.github/workflows" >> $GITHUB_ENV
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+
+          sudo apt install nano vim wget curl git ccache \
+          automake flex lzop bison gperf build-essential zip \
+          curl zlib1g-dev g++-multilib libxml2-utils bzip2 \
+          libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools \
+          pngcrush schedtool dpkg-dev liblz4-tool make optipng \
+          maven libssl-dev pwgen libswitch-perl policycoreutils \
+          minicom libxml-sax-base-perl libxml-simple-perl bc \
+          libc6-dev-i386 lib32ncurses-dev libx11-dev lib32z-dev \
+          libgl1-mesa-dev xsltproc unzip device-tree-compiler \
+          cpio p7zip p7zip-full libtinfo6 -y
+
+          sudo apt install python3 python-is-python3 -y
+
+      - name: Install AOSP-Clang
+        run: |
+          mkdir -p ${{ github.workspace }}/clang
+          wget -c --tries=10 --waitretry=5 --retry-on-host-error --retry-connrefused \
+            -O clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
+          tar -xzf clang.tar.gz -C ${{ github.workspace }}/clang
+          echo "${{ github.workspace }}/clang/bin" >> $GITHUB_PATH
+
+      - name: Install coccinelle for Droidspaces patch
+        if: ${{ github.event.inputs.enable_droidspaces == 'true' }}
+        run: |
+          sudo apt update
+          sudo apt install -y coccinelle
+
+      - name: Grant execute permission for build.sh
+        run: chmod +x build.sh
+
+      - name: Setup patch options
+        run: |
+          echo "DROIDSPACES_ENABLE=${{ github.event.inputs.enable_droidspaces || 'false' }}" >> "$GITHUB_ENV"
+          echo "REKERNEL_ENABLE=${{ github.event.inputs.enable_rekernel || 'false' }}" >> "$GITHUB_ENV"
+          echo "KERNEL_ARCH=arm64" >> "$GITHUB_ENV"
+          echo "DEFCONFIG_NAME=pipa_user_defconfig" >> "$GITHUB_ENV"
+          echo "SUSFS_ENABLE=false" >> "$GITHUB_ENV"
+
+      - name: Apply Droidspaces patch
+        if: ${{ github.event.inputs.enable_droidspaces == 'true' }}
+        uses: ./.github/workflows/patch-droidspaces
+
+      - name: Apply ReKernel patch
+        if: ${{ github.event.inputs.enable_rekernel == 'true' }}
+        uses: ./.github/workflows/patch-rekernel
+
+      - name: Build Kernel
+        run: ./build.sh
+
+      - name: Upload Kernel Zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: Kernel-Pipa-${{ github.ref_name }}-${{ github.run_number }}
+          path: '*.zip'
+          if-no-files-found: error
+
+      - name: Upload Error Log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-error-log-${{ github.ref_name }}
+          path: error.log
