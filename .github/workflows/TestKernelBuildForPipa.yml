@@ -38,7 +38,7 @@ jobs:
       - name: Install AOSP-Clang
         run: |
           mkdir -p ${{ github.workspace }}/clang
-          wget -c --tries=10 --waitretry=5 --retry-on-host-error --retry-on-connrefused \
+          wget -c --tries=10 --waitretry=5 --retry-on-host-error \
             -O clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/428d18d9732aa7ebfcaed87a582d86155db878d4/clang-r416183b.tar.gz"
           tar -xzf clang.tar.gz -C ${{ github.workspace }}/clang
           echo "${{ github.workspace }}/clang/bin" >> $GITHUB_PATH
