@@ -76,6 +76,17 @@ void format(void)
 	exit(2);
 }
 
+static unsigned long err_get_error_line_compat(const char **file, int *line)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	const char *func, *data;
+	int flags;
+	return ERR_get_error_all(file, line, &func, &data, &flags);
+#else
+	return ERR_get_error_line(file, line);
+#endif
+}
+
 static void display_openssl_errors(int l)
 {
 	const char *file;
@@ -86,7 +97,7 @@ static void display_openssl_errors(int l)
 		return;
 	fprintf(stderr, "At main.c:%d:\n", l);
 
-	while ((e = ERR_get_error_line(&file, &line))) {
+	while ((e = err_get_error_line_compat(&file, &line))) {
 		ERR_error_string(e, buf);
 		fprintf(stderr, "- SSL %s: %s:%d\n", buf, file, line);
 	}
@@ -99,7 +110,7 @@ static void drain_openssl_errors(void)
 
 	if (ERR_peek_error() == 0)
 		return;
-	while (ERR_get_error_line(&file, &line)) {}
+	while (err_get_error_line_compat(&file, &line)) {}
 }
 
 #define ERR(cond, fmt, ...)				\
@@ -116,6 +127,8 @@ static const char *key_pass;
 static int pem_pw_cb(char *buf, int len, int w, void *v)
 {
 	int pwlen;
+	(void)w;
+	(void)v;
 
 	if (!key_pass)
 		return -1;
@@ -139,17 +152,49 @@ static EVP_PKEY *read_private_key(const char *private_key_name)
 	if (!strncmp(private_key_name, "pkcs11:", 7)) {
 		ENGINE *e;
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 		ENGINE_load_builtin_engines();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic pop
+#endif
 		drain_openssl_errors();
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 		e = ENGINE_by_id("pkcs11");
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic pop
+#endif
 		ERR(!e, "Load PKCS#11 ENGINE");
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 		if (ENGINE_init(e))
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic pop
+#endif
 			drain_openssl_errors();
 		else
 			ERR(1, "ENGINE_init");
 		if (key_pass)
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 			ERR(!ENGINE_ctrl_cmd_string(e, "PIN", key_pass, 0),
 			    "Set PKCS#11 PIN");
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic pop
+#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 		private_key = ENGINE_load_private_key(e, private_key_name,
 						      NULL, NULL);
 		ERR(!private_key, "%s", private_key_name);
