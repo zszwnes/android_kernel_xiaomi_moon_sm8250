@@ -94,26 +94,28 @@ jobs:
             exit 0
           fi
 
-          MESSAGE=$(cat <<'EOF'
-          ✅ Build succeeded
-          Repository: ${{ github.repository }}
+          FULL_SHA="${{ github.sha }}"
+          SHORT_SHA="${FULL_SHA:0:5}"
+
+          MESSAGE="<b>✅ Build succeeded</b>
+          <a href=\"https://github.com/${{ github.repository }}\">Repository: ${{ github.repository }}</a>
           Branch: ${{ github.ref_name }}
-          Workflow: ${{ github.workflow }}
-          Run: #${{ github.run_number }}
-          Commit: ${{ github.sha }}
-          EOF
-          )
+          <a href=\"https://github.com/${{ github.repository }}/actions/workflows/BuildKernelForPipa.yml\">Workflow: ${{ github.workflow }}</a>
+          <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Run: #${{ github.run_number }}</a>
+          <a href=\"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\">Commit: ${SHORT_SHA}...</a>"
 
           ZIP_FILE=$(find . -maxdepth 1 -name '*.zip' | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
             curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
               -F chat_id="${TELEGRAM_CHAT_ID}" \
               -F document="@${ZIP_FILE}" \
-              -F caption="${MESSAGE}"
+              -F caption="${MESSAGE}" \
+              -F "parse_mode=HTML"
           else
             curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
               --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=${MESSAGE}"
+              --data-urlencode "text=${MESSAGE}" \
+              --data-urlencode "parse_mode=HTML"
           fi
 
       - name: Notify Telegram on build failure
@@ -127,19 +129,20 @@ jobs:
             exit 0
           fi
 
-          MESSAGE=$(cat <<'EOF'
-          ❌ Build failed
-          Repository: ${{ github.repository }}
+          FULL_SHA="${{ github.sha }}"
+          SHORT_SHA="${FULL_SHA:0:5}"
+
+          MESSAGE="<b>❌ Build failed</b>
+          <a href=\"https://github.com/${{ github.repository }}\">Repository: ${{ github.repository }}</a>
           Branch: ${{ github.ref_name }}
-          Workflow: ${{ github.workflow }}
-          Run: #${{ github.run_number }}
-          Commit: ${{ github.sha }}
-          EOF
-          )
+          <a href=\"https://github.com/${{ github.repository }}/actions/workflows/BuildKernelForPipa.yml\">Workflow: ${{ github.workflow }}</a>
+          <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Run: #${{ github.run_number }}</a>
+          <a href=\"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\">Commit: ${SHORT_SHA}...</a>"
 
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${MESSAGE}"
+            --data-urlencode "text=${MESSAGE}" \
+            --data-urlencode "parse_mode=HTML"
 
       - name: Upload Kernel Zip
         uses: actions/upload-artifact@v7
