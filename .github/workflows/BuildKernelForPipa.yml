@@ -95,7 +95,7 @@ jobs:
           fi
 
           FULL_SHA="${{ github.sha }}"
-          SHORT_SHA="${FULL_SHA:0:5}"
+          SHORT_SHA="${FULL_SHA:0:7}"
 
           MESSAGE="<b>✅ Build succeeded</b>
           <a href=\"https://github.com/${{ github.repository }}\">Repository: ${{ github.repository }}</a>
