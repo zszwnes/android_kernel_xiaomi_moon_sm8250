@@ -97,7 +97,10 @@ fi
 msg '为 PIPA 配置 (pipa_user_defconfig) / Configuring for PIPA (pipa_user_defconfig)...'
 make $MAKE_ARGS pipa_user_defconfig
 scripts/kconfig/merge_config.sh -m out/.config arch/arm64/configs/xiaomi.config
-yes '' | make $MAKE_ARGS olddefconfig
+# 'yes' may get SIGPIPE and exit non-zero when the reader finishes early.
+# With 'set -o pipefail' that would abort the script — ignore the pipeline
+# exit status to avoid failing the whole build step on benign Broken pipe.
+yes '' | make $MAKE_ARGS olddefconfig || true
 
 if [ -z "${JOBS:-}" ]; then
     MEM_AVAIL_KB=$(awk '/MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)
