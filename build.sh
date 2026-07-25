@@ -56,6 +56,7 @@ msg "工具链路径 / TOOLCHAIN_PATH: [$TOOLCHAIN_PATH]"
 export PATH="$TOOLCHAIN_PATH:$PATH"
 
 MAKE_ARGS='ARCH=arm64 O=out CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_COMPAT=arm-linux-androideabi- AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip'
+export KBUILD_OUTPUT=out
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_SSL_INCLUDE="$SCRIPT_DIR/../.build-deps/ssl-usr/include"
@@ -86,6 +87,9 @@ rm -f .config
 rm -rf include/config
 mkdir -p out/
 
+msg '执行 mrproper 清理源树 / Running mrproper to clean the source tree...'
+make ARCH=arm64 mrproper
+
 msg '准备 AnyKernel3 / Preparing AnyKernel3...'
 if [ -d 'anykernel/.git' ]; then
     msg 'AnyKernel3 已克隆，跳过克隆 / AnyKernel3 already cloned. Skipping clone.'
@@ -103,6 +107,13 @@ scripts/kconfig/merge_config.sh -m out/.config arch/arm64/configs/xiaomi.config
 # With 'set -o pipefail' that would abort the script — ignore the pipeline
 # exit status to avoid failing the whole build step on benign Broken pipe.
 yes '' | make $MAKE_ARGS olddefconfig || true
+
+msg '检查源树残留配置 / Checking for source tree config artifacts...'
+if [ -f .config ] || [ -d include/config ]; then
+    warn '检测到源树残留 .config 或 include/config，将清理它们以避免 prepare3 失败'
+    rm -f .config
+    rm -rf include/config
+fi
 
 if [ -z "${JOBS:-}" ]; then
     MEM_AVAIL_KB=$(awk '/MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)
