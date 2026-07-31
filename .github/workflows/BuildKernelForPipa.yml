@@ -30,6 +30,10 @@ jobs:
           echo "KERNEL_ROOT=${{ github.workspace }}" >> $GITHUB_ENV
           echo "PATCH_ROOT=${{ github.workspace }}/.github/workflows" >> $GITHUB_ENV
 
+      - name: Record build start time
+        id: build_start
+        run: echo "start=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Install Dependencies
         run: |
           sudo apt update
@@ -83,8 +87,8 @@ jobs:
       - name: Build Kernel
         run: ./build.sh
 
-      - name: Notify Telegram on build success
-        if: success()
+      - name: Send Telegram notification
+        if: always()
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -95,56 +99,62 @@ jobs:
             exit 0
           fi
 
-          FULL_SHA="${{ github.sha }}"
-          SHORT_SHA="${FULL_SHA:0:7}"
+          END=$(date +%s)
+          START="${{ steps.build_start.outputs.start }}"
+          DURATION=$((END - ${START:-END}))
+          HOURS=$((DURATION / 3600))
+          MINS=$(((DURATION % 3600) / 60))
+          SECS=$((DURATION % 60))
+          DURATION_FMT=$(printf "%02d:%02d:%02d" $HOURS $MINS $SECS)
 
-          MESSAGE="<b>✅ Build succeeded</b>
-          <a href=\"https://github.com/${{ github.repository }}\">Repository: ${{ github.repository }}</a>
-          Branch: ${{ github.ref_name }}
-          <a href=\"https://github.com/${{ github.repository }}/actions/workflows/BuildKernelForPipa.yml\">Workflow: ${{ github.workflow }}</a>
-          <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Run: #${{ github.run_number }}</a>
-          <a href=\"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\">Commit: ${SHORT_SHA}...</a>"
+          REPO="${{ github.repository }}"
+          REPO_URL="https://github.com/${REPO}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPO}/commit/${COMMIT_SHA}"
+          BRANCH="${{ github.ref_name }}"
+          RUN_NUMBER="${{ github.run_number }}"
+          COMMIT_MSG=$(git log -1 --pretty=format:'%s' "${COMMIT_SHA}" 2>/dev/null | head -c 120)
+          [ -z "$COMMIT_MSG" ] && COMMIT_MSG="(no message)"
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)
-          if [ -n "$ZIP_FILE" ]; then
-            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F document="@${ZIP_FILE}" \
-              --form-string chat_id="${TELEGRAM_CHAT_ID}" \
-              --form-string caption="${MESSAGE}" \
-              --form-string "parse_mode=HTML"
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="🟢 Build Success"
           else
-            curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=${MESSAGE}" \
-              --data-urlencode "parse_mode=HTML"
+            STATUS="🔴 Build Failed"
           fi
 
-      - name: Notify Telegram on build failure
-        if: failure()
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${TELEGRAM_CHAT_ID}" ]; then
-            echo "Telegram secrets not configured, skipping notification."
-            exit 0
+          printf -v MESSAGE '%s\nRepository: <a href="%s">%s</a>\nBranch: %s\nDuration: %s\nActions: <a href="%s">#%s</a>\nCommit: <a href="%s">%s</a> %s' \
+            "$STATUS" "$REPO_URL" "$REPO" "$BRANCH" "$DURATION_FMT" "$RUN_URL" "$RUN_NUMBER" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG"
+
+          if [ "${{ job.status }}" == "success" ]; then
+            ZIP_FILE=$(ls *.zip 2>/dev/null | head -1)
+            if [ -n "$ZIP_FILE" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F parse_mode=HTML \
+                -F caption="${MESSAGE}" \
+                -F "document=@${ZIP_FILE}"
+            else
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
+                --data-urlencode parse_mode=HTML \
+                --data-urlencode text="${MESSAGE}"
+            fi
+          else
+            if [ -f error.log ]; then
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F parse_mode=HTML \
+                -F caption="${MESSAGE}" \
+                -F "document=@error.log"
+            else
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" \
+                --data-urlencode parse_mode=HTML \
+                --data-urlencode text="${MESSAGE}"
+            fi
           fi
-
-          FULL_SHA="${{ github.sha }}"
-          SHORT_SHA="${FULL_SHA:0:7}"
-
-          MESSAGE="<b>❌ Build failed</b>
-          <a href=\"https://github.com/${{ github.repository }}\">Repository: ${{ github.repository }}</a>
-          Branch: ${{ github.ref_name }}
-          <a href=\"https://github.com/${{ github.repository }}/actions/workflows/BuildKernelForPipa.yml\">Workflow: ${{ github.workflow }}</a>
-          <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Run: #${{ github.run_number }}</a>
-          <a href=\"https://github.com/${{ github.repository }}/commit/${{ github.sha }}\">Commit: ${SHORT_SHA}...</a>"
-
-          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${MESSAGE}" \
-            --data-urlencode "parse_mode=HTML"
 
       - name: Upload Kernel Zip
         uses: actions/upload-artifact@v7
