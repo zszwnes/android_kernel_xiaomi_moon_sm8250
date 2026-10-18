@@ -172,6 +172,7 @@ else
     warn '未找到 dtbo.img，跳过 / dtbo.img not found, skipping.'
 fi
 
+cp -f out/System.map out/.config anykernel/ 2>/dev/null || true
 cd anykernel || { err '进入 anykernel 目录失败 / Failed to enter anykernel directory.'; exit 1; }
 
 timestamp=$(date +%Y%m%d)
