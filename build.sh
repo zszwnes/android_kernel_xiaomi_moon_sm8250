@@ -101,8 +101,10 @@ else
 fi
 
 msg '为 PIPA 配置 (pipa_user_defconfig) / Configuring for PIPA (pipa_user_defconfig)...'
+unset BRANCH KMI_GENERATION
+echo '-gc80e50029' > "$SCRIPT_DIR/.scmversion"
 make $MAKE_ARGS pipa_user_defconfig
-scripts/kconfig/merge_config.sh -m out/.config arch/arm64/configs/xiaomi.config
+cat arch/arm64/configs/xiaomi.config >> out/.config   # FIX(full-xiaomi-fragment-user-defconfig)
 # 'yes' may get SIGPIPE and exit non-zero when the reader finishes early.
 # With 'set -o pipefail' that would abort the script — ignore the pipeline
 # exit status to avoid failing the whole build step on benign Broken pipe.
