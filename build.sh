@@ -4,16 +4,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 ALT_REPO="https://github.com/utziacre/android_kernel_xiaomi_pipa"
 ALT_BRANCH="16-hyperos3"
-ZIPNAME="Kernel_utz3_pipa_$(date +%Y%m%d).zip"
-echo "===== ALT3 BUILD (shrinker_rwsem restore) ====="
+ZIPNAME="Kernel_utz4_pipa_$(date +%Y%m%d).zip"
+echo "===== ALT4 BUILD ====="
 rm -rf alt error.log Image *.zip || true
 git clone --depth 1 --single-branch -b "$ALT_BRANCH" "$ALT_REPO" alt
 cd alt
 : > .scmversion
-echo "--- patch mm/vmscan.c: restore static DECLARE_RWSEM(shrinker_rwsem)"
+echo "--- patch 1: vmscan shrinker_rwsem"
 sed -i 's/^static DEFINE_RWLOCK(shrinker_rwlock);$/static DEFINE_RWLOCK(shrinker_rwlock);\nstatic DECLARE_RWSEM(shrinker_rwsem);/' mm/vmscan.c
-sed -n '176,186p' mm/vmscan.c
-grep -n 'DECLARE_RWSEM(shrinker_rwsem)' mm/vmscan.c || { echo "PATCH FAILED"; exit 1; }
+grep -n 'DECLARE_RWSEM(shrinker_rwsem)' mm/vmscan.c || { echo "PATCH1 FAILED"; exit 1; }
+echo "--- patch 2: usbpd.h include err.h"
+sed -i '0,/#include <linux\/list.h>/s//#include <linux\/list.h>\n#include <linux\/err.h>/' include/linux/usb/usbpd.h
+sed -n '8,13p' include/linux/usb/usbpd.h
+grep -n 'linux/err.h' include/linux/usb/usbpd.h || { echo "PATCH2 FAILED"; exit 1; }
 export KBUILD_BUILD_USER=zszwnes KBUILD_BUILD_HOST=gh
 set +e
 sudo apt-get update -qq >/dev/null 2>&1
@@ -25,10 +28,10 @@ echo "--- using $CCBIN"; $CCBIN --version | head -2
 MAKE_ARGS="ARCH=arm64 O=out CC=$CCBIN LD=$LDBIN LLVM_IAS=1 CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- AR=llvm-ar-14 NM=llvm-nm-14 OBJCOPY=llvm-objcopy-14 OBJDUMP=llvm-objdump-14 STRIP=llvm-strip-14"
 mkdir -p out
 cp -f arch/arm64/configs/vendor/pipa_stock_defconfig out/.config
-printf '%s\n' 'CONFIG_LITTLE_CPU_MASK=0' 'CONFIG_BIG_CPU_MASK=0' 'CONFIG_PRIME_CPU_MASK=0' 'CONFIG_MMU_NOTIFIER=y' >> out/.config
+printf '%s\n' 'CONFIG_LITTLE_CPU_MASK=0' 'CONFIG_BIG_CPU_MASK=0' 'CONFIG_PRIME_CPU_MASK=0' 'CONFIG_MMU_NOTIFIER=y' '# CONFIG_CORESIGHT_ADRENO is not set' '# CONFIG_CORESIGHT is not set' >> out/.config
 echo "--- olddefconfig"
 make $MAKE_ARGS olddefconfig < /dev/null 2>&1 | tail -6
-grep -E 'CONFIG_LITTLE_CPU_MASK|CONFIG_LOCALVERSION=|CONFIG_CLANG_VERSION|CONFIG_MMU_NOTIFIER|CONFIG_KSU' out/.config || true
+grep -E 'CONFIG_LOCALVERSION=|CONFIG_CLANG_VERSION|CONFIG_MMU_NOTIFIER|CONFIG_CORESIGHT' out/.config || true
 cp -f out/.config "$SCRIPT_DIR/alt.config" || true
 JOBS=$(nproc); echo "--- build JOBS=$JOBS"
 set +e
@@ -43,4 +46,4 @@ cp -f out/System.map "$SCRIPT_DIR/System.map" || true
 cd "$SCRIPT_DIR"
 zip -q -j "$ZIPNAME" Image alt.config
 ls -l "$ZIPNAME" Image
-echo "===== ALT3 BUILD OK"
+echo "===== ALT4 BUILD OK"
