@@ -4,8 +4,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 ALT_REPO="https://github.com/utziacre/android_kernel_xiaomi_pipa"
 ALT_BRANCH="16-hyperos3"
-ZIPNAME="Kernel_utz7_pipa_$(date +%Y%m%d).zip"
-echo "===== ALT7: sparse defconfig + MMU_NOTIFIER default y ====="
+ZIPNAME="Kernel_utz8_pipa_$(date +%Y%m%d).zip"
+echo "===== ALT8: insert mmu_notifier enum + KVM off ====="
 rm -rf alt error.log Image *.zip || true
 git clone --depth 1 --single-branch -b "$ALT_BRANCH" "$ALT_REPO" alt
 cd alt
@@ -14,10 +14,26 @@ sed -i 's/^static DEFINE_RWLOCK(shrinker_rwlock);$/static DEFINE_RWLOCK(shrinker
 grep -q 'DECLARE_RWSEM(shrinker_rwsem)' mm/vmscan.c || { echo "PATCH1 FAILED"; exit 1; }
 sed -i '0,/#include <linux\/list.h>/s//#include <linux\/list.h>\n#include <linux\/err.h>/' include/linux/usb/usbpd.h
 grep -q 'linux/err.h' include/linux/usb/usbpd.h || { echo "PATCH2 FAILED"; exit 1; }
-# MMU_NOTIFIER is an unprompted bool in this tree; force default y so the header stays consistent
-sed -i '/^config MMU_NOTIFIER$/,/^\tselect SRCU$/ s/^\tselect SRCU$/\tdefault y\n\tselect SRCU/' mm/Kconfig
-awk '/^config MMU_NOTIFIER$/{f=1} f&&NR<99999{print; if(++c==4) exit}' mm/Kconfig
-grep -A2 '^config MMU_NOTIFIER$' mm/Kconfig | grep -q 'default y' || { echo "PATCH3 FAILED"; exit 1; }
+python3 - <<'PYEOF'
+p = 'include/linux/mmu_notifier.h'
+s = open(p).read()
+if 'MMU_NOTIFY_UNMAP = 0' in s:
+    print('ENUM ALREADY PRESENT')
+else:
+    marker = '#ifdef CONFIG_MMU_NOTIFIER\n'
+    i = s.index(marker)
+    enum = ('enum mmu_notifier_event {\n'
+            '\tMMU_NOTIFY_UNMAP = 0,\n'
+            '\tMMU_NOTIFY_CLEAR,\n'
+            '\tMMU_NOTIFY_PROTECTION_VMA,\n'
+            '\tMMU_NOTIFY_PROTECTION_PAGE,\n'
+            '\tMMU_NOTIFY_SOFT_DIRTY,\n'
+            '};\n\n')
+    s = s[:i] + enum + s[i:]
+    open(p, 'w').write(s)
+    print('ENUM INSERTED before line %d' % (s[:i].count('\n') + 1))
+PYEOF
+grep -q 'MMU_NOTIFY_UNMAP = 0' include/linux/mmu_notifier.h || { echo "PATCH3 FAILED"; exit 1; }
 export KBUILD_BUILD_USER=zszwnes KBUILD_BUILD_HOST=gh
 set +e
 sudo apt-get update -qq >/dev/null 2>&1
@@ -30,9 +46,9 @@ mkdir -p out
 cp -f arch/arm64/configs/defconfig out/.config
 cat arch/arm64/configs/vendor/xiaomi/sm8250-common.config >> out/.config || true
 cat arch/arm64/configs/vendor/xiaomi/pipa.config >> out/.config || true
-printf '%s\n' 'CONFIG_LITTLE_CPU_MASK=0' 'CONFIG_BIG_CPU_MASK=0' 'CONFIG_PRIME_CPU_MASK=0' 'CONFIG_MMU_NOTIFIER=y' 'CONFIG_ANDROID_VENDOR_HOOKS=y' 'CONFIG_USB_PD_POLICY=y' >> out/.config
+printf '%s\n' 'CONFIG_LITTLE_CPU_MASK=0' 'CONFIG_BIG_CPU_MASK=0' 'CONFIG_PRIME_CPU_MASK=0' '# CONFIG_KVM is not set' >> out/.config
 make $MAKE_ARGS olddefconfig < /dev/null 2>&1 | tail -6
-grep -E 'CONFIG_MMU_NOTIFIER|CONFIG_ANDROID_VENDOR_HOOKS|CONFIG_USB_PD_POLICY|CONFIG_LOCALVERSION|CONFIG_CLANG_VERSION' out/.config || true
+grep -E 'CONFIG_MMU_NOTIFIER|CONFIG_KVM=|CONFIG_LOCALVERSION|CONFIG_CLANG_VERSION' out/.config || true
 cp -f out/.config "$SCRIPT_DIR/alt.config" || true
 JOBS=$(nproc); echo "--- build Image only JOBS=$JOBS"
 set +e
@@ -40,11 +56,10 @@ make $MAKE_ARGS -j$JOBS Image 2>&1 | tee "$SCRIPT_DIR/error.log"
 rc=$?
 set -e
 echo "===== MAKE RC=$rc"
-cp -f out/.config "$SCRIPT_DIR/alt.config" 2>/dev/null || true
 if [ "$rc" != "0" ] || [ ! -f out/arch/arm64/boot/Image ]; then echo "BUILD FAILED"; exit 1; fi
 cp -f out/arch/arm64/boot/Image "$SCRIPT_DIR/Image"
 cp -f out/System.map "$SCRIPT_DIR/System.map" || true
 cd "$SCRIPT_DIR"
 zip -q -j "$ZIPNAME" Image alt.config
 ls -l "$ZIPNAME" Image
-echo "===== ALT7 BUILD OK"
+echo "===== ALT8 BUILD OK"
