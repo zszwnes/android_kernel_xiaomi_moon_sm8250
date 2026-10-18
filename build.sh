@@ -109,6 +109,7 @@ printf "%s\\n" CONFIG_PANIC_ON_OOPS=y CONFIG_PANIC_TIMEOUT=0 CONFIG_LOCKUP_DETEC
 # 'yes' may get SIGPIPE and exit non-zero when the reader finishes early.
 # With 'set -o pipefail' that would abort the script — ignore the pipeline
 # exit status to avoid failing the whole build step on benign Broken pipe.
+printf '%s\n' CONFIG_DEBUG_KERNEL=y CONFIG_LOCKUP_DETECTOR=y CONFIG_SOFTLOCKUP_DETECTOR=y CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC=y CONFIG_DEFAULT_HUNG_TASK_TIMEOUT=45 >> out/.config
 yes '' | make $MAKE_ARGS olddefconfig || true
 
 msg '检查源树残留配置 / Checking for source tree config artifacts...'
